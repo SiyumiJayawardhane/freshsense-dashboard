@@ -1,10 +1,14 @@
 import { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Home, FileText, Bell, LogOut, Leaf, Menu } from "lucide-react";
+import { Home, FileText, Bell, LogOut, Leaf, Menu, Moon, Sun, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
+import { useTheme } from "@/hooks/useTheme";
+import { useDashboardData } from "@/hooks/useDashboardData";
+import ChatBot from "@/components/ChatBot";
 
 const navItems = [
   { to: "/", label: "Home", icon: Home },
@@ -13,7 +17,9 @@ const navItems = [
 ];
 
 const DashboardLayout = ({ children }: { children: ReactNode }) => {
-  const { signOut, user } = useAuth();
+  const { signOut } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const { refetch, refreshing, secondsUntilRefresh } = useDashboardData();
 
   const SidebarContent = () => (
     <>
@@ -46,7 +52,14 @@ const DashboardLayout = ({ children }: { children: ReactNode }) => {
           </NavLink>
         ))}
       </nav>
-      <div className="p-3 border-t border-sidebar-border mt-auto">
+      <div className="p-3 border-t border-sidebar-border mt-auto space-y-2">
+        <div className="flex items-center justify-between px-2 py-1.5 rounded-lg">
+          <div className="flex items-center gap-2 text-sm text-sidebar-foreground">
+            {theme === "dark" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+            <span>Dark mode</span>
+          </div>
+          <Switch checked={theme === "dark"} onCheckedChange={toggleTheme} aria-label="Toggle dark mode" />
+        </div>
         <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-muted-foreground" onClick={signOut}>
           <LogOut className="h-4 w-4" /> Sign Out
         </Button>
@@ -56,14 +69,8 @@ const DashboardLayout = ({ children }: { children: ReactNode }) => {
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row bg-background">
-      {/* Mobile Header with Hamburger */}
-      <header className="md:hidden flex flex-shrink-0 items-center justify-between p-4 border-b border-border bg-background sticky top-0 z-30">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
-            <Leaf className="h-4 w-4 text-primary-foreground" />
-          </div>
-          <div className="font-bold text-foreground">FreshSense</div>
-        </div>
+      {/* Mobile Header with Hamburger on the left */}
+      <header className="md:hidden flex flex-shrink-0 items-center gap-3 p-4 border-b border-border bg-background sticky top-0 z-30">
         <Sheet>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="md:hidden">
@@ -75,6 +82,12 @@ const DashboardLayout = ({ children }: { children: ReactNode }) => {
             <SidebarContent />
           </SheetContent>
         </Sheet>
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
+            <Leaf className="h-4 w-4 text-primary-foreground" />
+          </div>
+          <div className="font-bold text-foreground">FreshSense</div>
+        </div>
       </header>
 
       {/* Sidebar for desktop */}
@@ -83,9 +96,27 @@ const DashboardLayout = ({ children }: { children: ReactNode }) => {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto p-4 md:p-6 w-full">
+      <main className="flex-1 overflow-auto p-4 md:p-6 w-full pb-24 md:pb-6">
         {children}
       </main>
+
+      {/* Mobile bottom action bar — thumb-friendly */}
+      <div className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-30">
+        <Button
+          onClick={refetch}
+          disabled={refreshing}
+          size="lg"
+          className="h-14 px-6 rounded-full shadow-lg gap-2"
+        >
+          <RefreshCw className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`} />
+          <span className="font-semibold">
+            {refreshing ? "Refreshing..." : `Refresh · ${secondsUntilRefresh}s`}
+          </span>
+        </Button>
+      </div>
+
+      {/* AI Chatbot — floating bubble */}
+      <ChatBot />
     </div>
   );
 };
