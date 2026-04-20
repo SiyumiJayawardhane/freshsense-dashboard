@@ -1,2 +1,3 @@
-# freshsense-dashboard
-A responsive Next.js and React web dashboard for real-time monitoring of food inventory, freshness status, and historical spoilage telemetry.
+# Welcome to your Lovable project
+
+TODO: Document your project here
