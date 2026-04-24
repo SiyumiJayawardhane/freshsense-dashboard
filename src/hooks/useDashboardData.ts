@@ -26,6 +26,55 @@ interface SensorReading {
   food_item_id: string | null;
 }
 
+type GenericRecord = Record<string, unknown>;
+
+const parseNumeric = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const pickNumeric = (source: GenericRecord, keys: string[]): number | null => {
+  for (const key of keys) {
+    const parsed = parseNumeric(source[key]);
+    if (parsed !== null) return parsed;
+  }
+  return null;
+};
+
+const normalizeSensorReading = (reading: unknown): SensorReading => {
+  const source = (reading ?? {}) as GenericRecord;
+
+  const mq135 = pickNumeric(source, [
+    "mq135_gas_level",
+    "mq135_gas_value",
+    "MQ135_gas_value",
+    "mq135",
+    "MQ135",
+  ]);
+  const mq3 = pickNumeric(source, [
+    "mq3_gas_level",
+    "mq3_gas_value",
+    "MQ3_gas_value",
+    "mq3",
+    "MQ3",
+  ]);
+
+  return {
+    id: String(source.id ?? ""),
+    humidity: parseNumeric(source.humidity),
+    temperature: parseNumeric(source.temperature),
+    gas_value: parseNumeric(source.gas_value) ?? mq135,
+    mq135_gas_level: mq135,
+    mq3_gas_level: mq3,
+    recorded_at: String(source.recorded_at ?? ""),
+    food_item_id: source.food_item_id === null || typeof source.food_item_id === "string" ? source.food_item_id : null,
+  };
+};
+
 interface Notification {
   id: string;
   title: string;
@@ -57,7 +106,7 @@ export const useDashboardData = () => {
     ]);
 
     if (itemsRes.data) setFoodItems(itemsRes.data as FoodItem[]);
-    if (readingRes.data && readingRes.data.length > 0) setLatestReading(readingRes.data[0] as SensorReading);
+    if (readingRes.data && readingRes.data.length > 0) setLatestReading(normalizeSensorReading(readingRes.data[0]));
     if (notifsRes.data) setNotifications(notifsRes.data as Notification[]);
     setLoading(false);
     setRefreshing(false);
@@ -104,7 +153,7 @@ export const useDashboardData = () => {
         .then((res) => res.json())
         .then((snapshot) => {
           if (snapshot?.latest_reading) {
-            setLatestReading(snapshot.latest_reading as SensorReading);
+            setLatestReading(normalizeSensorReading(snapshot.latest_reading));
           }
         })
         .catch(() => {
@@ -117,7 +166,7 @@ export const useDashboardData = () => {
           const parsed = JSON.parse(event.data);
           const payload = parsed?.payload;
           if (payload?.latest_reading) {
-            setLatestReading(payload.latest_reading as SensorReading);
+            setLatestReading(normalizeSensorReading(payload.latest_reading));
           }
           // Sync canonical entities from Supabase after live ingestion notice.
           fetchData();
