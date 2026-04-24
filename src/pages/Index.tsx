@@ -5,13 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, Clock, AlertCircle, Droplets, Thermometer, Wind, Leaf, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-
+ 
 const statusConfig = {
   fresh: { label: "FRESH", className: "bg-primary text-primary-foreground" },
   at_risk: { label: "USE SOON", className: "bg-warning text-warning-foreground" },
   spoiled: { label: "SPOILED", className: "bg-destructive text-destructive-foreground" },
 };
-
+ 
 const formatRefreshTime = (date: Date | null) => {
   if (!date) return "Never";
   return date.toLocaleString(undefined, {
@@ -19,13 +19,13 @@ const formatRefreshTime = (date: Date | null) => {
     hour: "2-digit", minute: "2-digit", second: "2-digit",
   });
 };
-
+ 
 const Index = () => {
-  const { foodItems, latestReading, freshCount, atRiskCount, spoiledCount, loading, refreshing, lastRefreshed, secondsUntilRefresh, refetch } = useDashboardData();
+  const { foodItems, latestReading, inferenceByFoodItem, freshCount, atRiskCount, spoiledCount, loading, refreshing, lastRefreshed, refetch } = useDashboardData();
   const navigate = useNavigate();
   const airQualityLevel = latestReading?.mq135_gas_level ?? latestReading?.gas_value;
   const spoilageGasLevel = latestReading?.mq3_gas_level;
-
+ 
   if (loading) {
     return (
       <DashboardLayout>
@@ -33,7 +33,7 @@ const Index = () => {
       </DashboardLayout>
     );
   }
-
+ 
   return (
     <DashboardLayout>
       <div className="space-y-6 max-w-6xl">
@@ -52,17 +52,15 @@ const Index = () => {
               className="gap-2"
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-              {refreshing ? "Refreshing..." : `Refresh (${secondsUntilRefresh}s)`}
+              {refreshing ? "Updating Items..." : "Update Items"}
             </Button>
             <span className="text-xs text-muted-foreground">
               Last updated: {formatRefreshTime(lastRefreshed)}
             </span>
           </div>
-          <div className="sm:hidden text-xs text-muted-foreground">
-            Last updated: {formatRefreshTime(lastRefreshed)} · Next in {secondsUntilRefresh}s
-          </div>
+          <div className="sm:hidden text-xs text-muted-foreground">Last updated: {formatRefreshTime(lastRefreshed)}</div>
         </div>
-
+ 
         {/* Welcome banner */}
         <div className="rounded-xl bg-primary p-6 text-primary-foreground relative overflow-hidden">
           <div className="relative z-10">
@@ -75,7 +73,7 @@ const Index = () => {
             <Leaf className="h-24 w-24" />
           </div>
         </div>
-
+ 
         {/* Status cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card className="border-l-4 border-l-primary">
@@ -121,7 +119,7 @@ const Index = () => {
             </CardContent>
           </Card>
         </div>
-
+ 
         {/* Real-time sensor readings */}
         <Card>
           <CardContent className="p-6">
@@ -155,7 +153,7 @@ const Index = () => {
             </div>
           </CardContent>
         </Card>
-
+ 
         {/* Detected items */}
         <Card>
           <CardContent className="p-6">
@@ -192,6 +190,11 @@ const Index = () => {
                         <div>
                           <div className="font-semibold text-foreground">{item.name}</div>
                           <div className="text-xs text-muted-foreground">Confidence: {item.confidence}%</div>
+                          {inferenceByFoodItem[item.id] && (
+                            <div className="text-[11px] text-muted-foreground mt-1">
+                              Final: {inferenceByFoodItem[item.id].final_status} | Vision: {inferenceByFoodItem[item.id].vision_status ?? "--"} | Sensor: {inferenceByFoodItem[item.id].sensor_status ?? "--"}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <Badge className={sc.className}>{sc.label}</Badge>
@@ -206,5 +209,5 @@ const Index = () => {
     </DashboardLayout>
   );
 };
-
+ 
 export default Index;

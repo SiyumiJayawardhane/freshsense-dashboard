@@ -19,7 +19,7 @@ const navItems = [
 const DashboardLayout = ({ children }: { children: ReactNode }) => {
   const { signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const { refetch, refreshing, secondsUntilRefresh } = useDashboardData();
+  const { refetch, refreshing } = useDashboardData();
 
   const SidebarContent = () => (
     <>
@@ -110,7 +110,7 @@ const DashboardLayout = ({ children }: { children: ReactNode }) => {
         >
           <RefreshCw className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`} />
           <span className="font-semibold">
-            {refreshing ? "Refreshing..." : `Refresh · ${secondsUntilRefresh}s`}
+            {refreshing ? "Updating Items..." : "Update Items"}
           </span>
         </Button>
       </div>

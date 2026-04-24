@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-
+ 
 interface FoodItem {
   id: string;
   name: string;
@@ -14,7 +14,7 @@ interface FoodItem {
   estimated_days_to_spoil: number | null;
   storage_tips: string[] | null;
 }
-
+ 
 interface SensorReading {
   id: string;
   humidity: number | null;
@@ -25,9 +25,9 @@ interface SensorReading {
   recorded_at: string;
   food_item_id: string | null;
 }
-
+ 
 type GenericRecord = Record<string, unknown>;
-
+ 
 const parseNumeric = (value: unknown): number | null => {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
@@ -36,7 +36,7 @@ const parseNumeric = (value: unknown): number | null => {
   }
   return null;
 };
-
+ 
 const pickNumeric = (source: GenericRecord, keys: string[]): number | null => {
   for (const key of keys) {
     const parsed = parseNumeric(source[key]);
@@ -44,10 +44,11 @@ const pickNumeric = (source: GenericRecord, keys: string[]): number | null => {
   }
   return null;
 };
-
+ 
 const normalizeSensorReading = (reading: unknown): SensorReading => {
   const source = (reading ?? {}) as GenericRecord;
-
+  const rawFoodItemId = source.food_item_id;
+ 
   const mq135 = pickNumeric(source, [
     "mq135_gas_level",
     "mq135_gas_value",
@@ -62,7 +63,7 @@ const normalizeSensorReading = (reading: unknown): SensorReading => {
     "mq3",
     "MQ3",
   ]);
-
+ 
   return {
     id: String(source.id ?? ""),
     humidity: parseNumeric(source.humidity),
@@ -71,10 +72,10 @@ const normalizeSensorReading = (reading: unknown): SensorReading => {
     mq135_gas_level: mq135,
     mq3_gas_level: mq3,
     recorded_at: String(source.recorded_at ?? ""),
-    food_item_id: source.food_item_id === null || typeof source.food_item_id === "string" ? source.food_item_id : null,
+    food_item_id: typeof rawFoodItemId === "string" ? rawFoodItemId : null,
   };
 };
-
+ 
 interface Notification {
   id: string;
   title: string;
@@ -84,6 +85,20 @@ interface Notification {
   created_at: string;
   food_item_id: string | null;
 }
+ 
+export interface InferenceLog {
+  id: string;
+  food_item_id: string | null;
+  item_name: string | null;
+  vision_status: string | null;
+  vision_confidence: number | null;
+  sensor_status: string | null;
+  sensor_confidence: number | null;
+  gas_trend_status: string | null;
+  final_status: string;
+  final_score: number | null;
+  captured_at: string | null;
+}
 
 export const useDashboardData = () => {
   const { user } = useAuth();
@@ -91,62 +106,61 @@ export const useDashboardData = () => {
   const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
   const [latestReading, setLatestReading] = useState<SensorReading | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [inferenceLogs, setInferenceLogs] = useState<InferenceLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
-
+ 
   const fetchData = useCallback(async () => {
     if (!user) return;
     setRefreshing(true);
-
-    const [itemsRes, readingRes, notifsRes] = await Promise.all([
+ 
+    const [itemsRes, readingRes, notifsRes, inferenceRes] = await Promise.all([
       supabase.from("food_items").select("*").order("detected_at", { ascending: false }),
       supabase.from("sensor_readings").select("*").order("recorded_at", { ascending: false }).limit(1),
       supabase.from("notifications").select("*").order("created_at", { ascending: false }),
+      supabase
+        .from("inference_logs")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("captured_at", { ascending: false })
+        .limit(200),
     ]);
-
+ 
     if (itemsRes.data) setFoodItems(itemsRes.data as FoodItem[]);
     if (readingRes.data && readingRes.data.length > 0) setLatestReading(normalizeSensorReading(readingRes.data[0]));
     if (notifsRes.data) setNotifications(notifsRes.data as Notification[]);
+    if (inferenceRes.data) setInferenceLogs(inferenceRes.data as InferenceLog[]);
     setLoading(false);
     setRefreshing(false);
     setLastRefreshed(new Date());
   }, [user]);
-
-  const REFRESH_INTERVAL = 30; // seconds
-  const [secondsUntilRefresh, setSecondsUntilRefresh] = useState(REFRESH_INTERVAL);
-
+ 
   useEffect(() => {
     fetchData();
-
-    // Auto-refresh every 30s with countdown
-    const countdown = setInterval(() => {
-      setSecondsUntilRefresh((s) => {
-        if (s <= 1) {
-          fetchData();
-          return REFRESH_INTERVAL;
-        }
-        return s - 1;
-      });
-    }, 1000);
-
+ 
     // Real-time subscriptions (unique channel names per hook instance)
     const suffix = `${Math.random().toString(36).slice(2)}-${Date.now()}`;
     const foodChannel = supabase
       .channel(`food-items-changes-${suffix}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "food_items" }, () => fetchData())
       .subscribe();
-
+ 
     const sensorChannel = supabase
       .channel(`sensor-readings-changes-${suffix}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "sensor_readings" }, () => fetchData())
       .subscribe();
-
+ 
     const notifChannel = supabase
       .channel(`notifications-changes-${suffix}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => fetchData())
       .subscribe();
 
+    const inferenceChannel = supabase
+      .channel(`inference-logs-changes-${suffix}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "inference_logs" }, () => fetchData())
+      .subscribe();
+ 
     let eventSource: EventSource | null = null;
     if (backendUrl && user?.id) {
       fetch(`${backendUrl}/api/dashboard/${user.id}/latest`)
@@ -159,7 +173,7 @@ export const useDashboardData = () => {
         .catch(() => {
           // Keep UI resilient; Supabase polling/realtime still works.
         });
-
+ 
       eventSource = new EventSource(`${backendUrl}/api/stream/${user.id}`);
       eventSource.onmessage = (event) => {
         try {
@@ -170,31 +184,59 @@ export const useDashboardData = () => {
           }
           // Sync canonical entities from Supabase after live ingestion notice.
           fetchData();
-          setSecondsUntilRefresh(REFRESH_INTERVAL);
         } catch {
           // Ignore malformed SSE events.
         }
       };
     }
-
+ 
     return () => {
-      clearInterval(countdown);
       supabase.removeChannel(foodChannel);
       supabase.removeChannel(sensorChannel);
       supabase.removeChannel(notifChannel);
+      supabase.removeChannel(inferenceChannel);
       if (eventSource) eventSource.close();
     };
   }, [user, backendUrl, fetchData]);
-
+ 
   const wrappedRefetch = async () => {
-    setSecondsUntilRefresh(REFRESH_INTERVAL);
+    if (refreshing) return;
+    if (backendUrl) {
+      try {
+        await fetch(`${backendUrl}/api/edge/trigger`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source: "dashboard-refresh-button" }),
+        });
+      } catch {
+        // If manual trigger API is unavailable, still refresh current data.
+      }
+    }
     await fetchData();
   };
-
+ 
   const freshCount = foodItems.filter((i) => i.freshness_status === "fresh").length;
   const atRiskCount = foodItems.filter((i) => i.freshness_status === "at_risk").length;
   const spoiledCount = foodItems.filter((i) => i.freshness_status === "spoiled").length;
   const unreadNotifCount = notifications.filter((n) => !n.is_read).length;
-
-  return { foodItems, latestReading, notifications, loading, refreshing, lastRefreshed, freshCount, atRiskCount, spoiledCount, unreadNotifCount, secondsUntilRefresh, refetch: wrappedRefetch };
+  const inferenceByFoodItem = inferenceLogs.reduce<Record<string, InferenceLog>>((acc, row) => {
+    if (row.food_item_id && !acc[row.food_item_id]) acc[row.food_item_id] = row;
+    return acc;
+  }, {});
+ 
+  return {
+    foodItems,
+    latestReading,
+    notifications,
+    inferenceLogs,
+    inferenceByFoodItem,
+    loading,
+    refreshing,
+    lastRefreshed,
+    freshCount,
+    atRiskCount,
+    spoiledCount,
+    unreadNotifCount,
+    refetch: wrappedRefetch,
+  };
 };
