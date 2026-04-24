@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -20,6 +20,8 @@ interface SensorReading {
   humidity: number | null;
   temperature: number | null;
   gas_value: number | null;
+  mq135_gas_level?: number | null;
+  mq3_gas_level?: number | null;
   recorded_at: string;
   food_item_id: string | null;
 }
@@ -36,6 +38,7 @@ interface Notification {
 
 export const useDashboardData = () => {
   const { user } = useAuth();
+  const backendUrl = (import.meta.env.VITE_BACKEND_API_URL as string | undefined)?.replace(/\/+$/, "");
   const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
   const [latestReading, setLatestReading] = useState<SensorReading | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -43,7 +46,7 @@ export const useDashboardData = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!user) return;
     setRefreshing(true);
 
@@ -59,7 +62,7 @@ export const useDashboardData = () => {
     setLoading(false);
     setRefreshing(false);
     setLastRefreshed(new Date());
-  };
+  }, [user]);
 
   const REFRESH_INTERVAL = 30; // seconds
   const [secondsUntilRefresh, setSecondsUntilRefresh] = useState(REFRESH_INTERVAL);
@@ -95,13 +98,44 @@ export const useDashboardData = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => fetchData())
       .subscribe();
 
+    let eventSource: EventSource | null = null;
+    if (backendUrl && user?.id) {
+      fetch(`${backendUrl}/api/dashboard/${user.id}/latest`)
+        .then((res) => res.json())
+        .then((snapshot) => {
+          if (snapshot?.latest_reading) {
+            setLatestReading(snapshot.latest_reading as SensorReading);
+          }
+        })
+        .catch(() => {
+          // Keep UI resilient; Supabase polling/realtime still works.
+        });
+
+      eventSource = new EventSource(`${backendUrl}/api/stream/${user.id}`);
+      eventSource.onmessage = (event) => {
+        try {
+          const parsed = JSON.parse(event.data);
+          const payload = parsed?.payload;
+          if (payload?.latest_reading) {
+            setLatestReading(payload.latest_reading as SensorReading);
+          }
+          // Sync canonical entities from Supabase after live ingestion notice.
+          fetchData();
+          setSecondsUntilRefresh(REFRESH_INTERVAL);
+        } catch {
+          // Ignore malformed SSE events.
+        }
+      };
+    }
+
     return () => {
       clearInterval(countdown);
       supabase.removeChannel(foodChannel);
       supabase.removeChannel(sensorChannel);
       supabase.removeChannel(notifChannel);
+      if (eventSource) eventSource.close();
     };
-  }, [user]);
+  }, [user, backendUrl, fetchData]);
 
   const wrappedRefetch = async () => {
     setSecondsUntilRefresh(REFRESH_INTERVAL);
