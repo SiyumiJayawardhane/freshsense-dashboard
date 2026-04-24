@@ -52,7 +52,7 @@ const Index = () => {
               className="gap-2"
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-              {refreshing ? "Refreshing..." : "Refresh"}
+              {refreshing ? "Updating Items..." : "Update Items"}
             </Button>
             <span className="text-xs text-muted-foreground">
               Last updated: {formatRefreshTime(lastRefreshed)}
