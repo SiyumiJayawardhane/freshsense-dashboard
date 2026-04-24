@@ -68,6 +68,74 @@ export type Database = {
         }
         Relationships: []
       }
+      inference_logs: {
+        Row: {
+          captured_at: string | null
+          created_at: string | null
+          final_score: number | null
+          final_status: string
+          food_item_id: string | null
+          gas_trend_status: string | null
+          humidity: number | null
+          id: string
+          item_name: string | null
+          mq135_value: number | null
+          mq3_value: number | null
+          sensor_confidence: number | null
+          sensor_status: string | null
+          temperature: number | null
+          user_id: string
+          vision_confidence: number | null
+          vision_status: string | null
+        }
+        Insert: {
+          captured_at?: string | null
+          created_at?: string | null
+          final_score?: number | null
+          final_status: string
+          food_item_id?: string | null
+          gas_trend_status?: string | null
+          humidity?: number | null
+          id?: string
+          item_name?: string | null
+          mq135_value?: number | null
+          mq3_value?: number | null
+          sensor_confidence?: number | null
+          sensor_status?: string | null
+          temperature?: number | null
+          user_id: string
+          vision_confidence?: number | null
+          vision_status?: string | null
+        }
+        Update: {
+          captured_at?: string | null
+          created_at?: string | null
+          final_score?: number | null
+          final_status?: string
+          food_item_id?: string | null
+          gas_trend_status?: string | null
+          humidity?: number | null
+          id?: string
+          item_name?: string | null
+          mq135_value?: number | null
+          mq3_value?: number | null
+          sensor_confidence?: number | null
+          sensor_status?: string | null
+          temperature?: number | null
+          user_id?: string
+          vision_confidence?: number | null
+          vision_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inference_logs_food_item_id_fkey"
+            columns: ["food_item_id"]
+            isOneToOne: false
+            referencedRelation: "food_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string

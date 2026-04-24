@@ -4,7 +4,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, Clock, AlertCircle, Droplets, Thermometer, Wind, Leaf, RefreshCw } from "lucide-react";
-import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
  
 const statusConfig = {
@@ -22,21 +21,10 @@ const formatRefreshTime = (date: Date | null) => {
 };
  
 const Index = () => {
-  const { foodItems, latestReading, freshCount, atRiskCount, spoiledCount, loading, refreshing, lastRefreshed, refetch } = useDashboardData();
+  const { foodItems, latestReading, inferenceByFoodItem, freshCount, atRiskCount, spoiledCount, loading, refreshing, lastRefreshed, refetch } = useDashboardData();
   const navigate = useNavigate();
   const airQualityLevel = latestReading?.mq135_gas_level ?? latestReading?.gas_value;
   const spoilageGasLevel = latestReading?.mq3_gas_level;
-  const autoRefreshSeconds = Number(import.meta.env.VITE_DASHBOARD_AUTO_REFRESH_SECONDS ?? 30);
-
-  useEffect(() => {
-    if (!Number.isFinite(autoRefreshSeconds) || autoRefreshSeconds <= 0) return;
-
-    const intervalId = window.setInterval(() => {
-      void refetch();
-    }, autoRefreshSeconds * 1000);
-
-    return () => window.clearInterval(intervalId);
-  }, [autoRefreshSeconds, refetch]);
  
   if (loading) {
     return (
@@ -202,6 +190,11 @@ const Index = () => {
                         <div>
                           <div className="font-semibold text-foreground">{item.name}</div>
                           <div className="text-xs text-muted-foreground">Confidence: {item.confidence}%</div>
+                          {inferenceByFoodItem[item.id] && (
+                            <div className="text-[11px] text-muted-foreground mt-1">
+                              Final: {inferenceByFoodItem[item.id].final_status} | Vision: {inferenceByFoodItem[item.id].vision_status ?? "--"} | Sensor: {inferenceByFoodItem[item.id].sensor_status ?? "--"}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <Badge className={sc.className}>{sc.label}</Badge>

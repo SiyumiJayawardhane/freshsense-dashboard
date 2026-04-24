@@ -86,12 +86,27 @@ interface Notification {
   food_item_id: string | null;
 }
  
+export interface InferenceLog {
+  id: string;
+  food_item_id: string | null;
+  item_name: string | null;
+  vision_status: string | null;
+  vision_confidence: number | null;
+  sensor_status: string | null;
+  sensor_confidence: number | null;
+  gas_trend_status: string | null;
+  final_status: string;
+  final_score: number | null;
+  captured_at: string | null;
+}
+
 export const useDashboardData = () => {
   const { user } = useAuth();
   const backendUrl = (import.meta.env.VITE_BACKEND_API_URL as string | undefined)?.replace(/\/+$/, "");
   const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
   const [latestReading, setLatestReading] = useState<SensorReading | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [inferenceLogs, setInferenceLogs] = useState<InferenceLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
@@ -100,15 +115,22 @@ export const useDashboardData = () => {
     if (!user) return;
     setRefreshing(true);
  
-    const [itemsRes, readingRes, notifsRes] = await Promise.all([
+    const [itemsRes, readingRes, notifsRes, inferenceRes] = await Promise.all([
       supabase.from("food_items").select("*").order("detected_at", { ascending: false }),
       supabase.from("sensor_readings").select("*").order("recorded_at", { ascending: false }).limit(1),
       supabase.from("notifications").select("*").order("created_at", { ascending: false }),
+      supabase
+        .from("inference_logs")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("captured_at", { ascending: false })
+        .limit(200),
     ]);
  
     if (itemsRes.data) setFoodItems(itemsRes.data as FoodItem[]);
     if (readingRes.data && readingRes.data.length > 0) setLatestReading(normalizeSensorReading(readingRes.data[0]));
     if (notifsRes.data) setNotifications(notifsRes.data as Notification[]);
+    if (inferenceRes.data) setInferenceLogs(inferenceRes.data as InferenceLog[]);
     setLoading(false);
     setRefreshing(false);
     setLastRefreshed(new Date());
@@ -132,6 +154,11 @@ export const useDashboardData = () => {
     const notifChannel = supabase
       .channel(`notifications-changes-${suffix}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => fetchData())
+      .subscribe();
+
+    const inferenceChannel = supabase
+      .channel(`inference-logs-changes-${suffix}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "inference_logs" }, () => fetchData())
       .subscribe();
  
     let eventSource: EventSource | null = null;
@@ -167,6 +194,7 @@ export const useDashboardData = () => {
       supabase.removeChannel(foodChannel);
       supabase.removeChannel(sensorChannel);
       supabase.removeChannel(notifChannel);
+      supabase.removeChannel(inferenceChannel);
       if (eventSource) eventSource.close();
     };
   }, [user, backendUrl, fetchData]);
@@ -191,6 +219,24 @@ export const useDashboardData = () => {
   const atRiskCount = foodItems.filter((i) => i.freshness_status === "at_risk").length;
   const spoiledCount = foodItems.filter((i) => i.freshness_status === "spoiled").length;
   const unreadNotifCount = notifications.filter((n) => !n.is_read).length;
+  const inferenceByFoodItem = inferenceLogs.reduce<Record<string, InferenceLog>>((acc, row) => {
+    if (row.food_item_id && !acc[row.food_item_id]) acc[row.food_item_id] = row;
+    return acc;
+  }, {});
  
-  return { foodItems, latestReading, notifications, loading, refreshing, lastRefreshed, freshCount, atRiskCount, spoiledCount, unreadNotifCount, refetch: wrappedRefetch };
+  return {
+    foodItems,
+    latestReading,
+    notifications,
+    inferenceLogs,
+    inferenceByFoodItem,
+    loading,
+    refreshing,
+    lastRefreshed,
+    freshCount,
+    atRiskCount,
+    spoiledCount,
+    unreadNotifCount,
+    refetch: wrappedRefetch,
+  };
 };
