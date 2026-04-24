@@ -14,7 +14,7 @@ const statusConfig = {
 };
 
 const ItemDetail = ({ itemId }: { itemId: string }) => {
-  const { foodItems } = useDashboardData();
+  const { foodItems, inferenceByFoodItem } = useDashboardData();
   const navigate = useNavigate();
   const item = foodItems.find((i) => i.id === itemId);
   const [readings, setReadings] = useState<any[]>([]);
@@ -45,6 +45,7 @@ const ItemDetail = ({ itemId }: { itemId: string }) => {
   const sc = statusConfig[item.freshness_status];
   const reading = readings[0];
   const timeSince = item.detected_at ? getTimeSince(item.detected_at) : "Unknown";
+  const inference = inferenceByFoodItem[item.id];
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -114,6 +115,36 @@ const ItemDetail = ({ itemId }: { itemId: string }) => {
         </Card>
       </div>
 
+      {inference && (
+        <Card>
+          <CardContent className="p-6">
+            <h3 className="font-bold text-foreground mb-3">Final Fusion Output</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <div className="rounded-lg border p-3">
+                <p className="text-muted-foreground">Final Status</p>
+                <p className="font-semibold">{inference.final_status}</p>
+                <p className="text-xs text-muted-foreground mt-1">Score: {inference.final_score ?? "--"}</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-muted-foreground">Vision Model</p>
+                <p className="font-semibold">{inference.vision_status ?? "--"}</p>
+                <p className="text-xs text-muted-foreground mt-1">Confidence: {inference.vision_confidence ?? "--"}</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-muted-foreground">Sensor Model</p>
+                <p className="font-semibold">{inference.sensor_status ?? "--"}</p>
+                <p className="text-xs text-muted-foreground mt-1">Confidence: {inference.sensor_confidence ?? "--"}</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-muted-foreground">Gas Trend</p>
+                <p className="font-semibold">{inference.gas_trend_status ?? "--"}</p>
+                <p className="text-xs text-muted-foreground mt-1">Captured: {inference.captured_at ? getTimeSince(inference.captured_at) : "--"}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {item.storage_tips && item.storage_tips.length > 0 && (
         <Card className="bg-accent/30">
           <CardContent className="p-6">
@@ -134,7 +165,7 @@ const ItemDetail = ({ itemId }: { itemId: string }) => {
 };
 
 const ItemsList = () => {
-  const { foodItems, loading } = useDashboardData();
+  const { foodItems, inferenceByFoodItem, loading } = useDashboardData();
   const navigate = useNavigate();
 
   if (loading) return <p className="text-muted-foreground">Loading...</p>;
@@ -169,6 +200,11 @@ const ItemsList = () => {
                     <div>
                       <div className="font-semibold text-foreground">{item.name}</div>
                       <div className="text-xs text-muted-foreground">Confidence: {item.confidence}% • {item.estimated_days_to_spoil ? `${item.estimated_days_to_spoil} days left` : "N/A"}</div>
+                      {inferenceByFoodItem[item.id] && (
+                        <div className="text-[11px] text-muted-foreground mt-1">
+                          Final: {inferenceByFoodItem[item.id].final_status} | Vision: {inferenceByFoodItem[item.id].vision_status ?? "--"} | Sensor: {inferenceByFoodItem[item.id].sensor_status ?? "--"}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <Badge className={sc.className}>{sc.label}</Badge>

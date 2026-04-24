@@ -5,13 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, Clock, AlertCircle, Droplets, Thermometer, Wind, Leaf, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-
+ 
 const statusConfig = {
   fresh: { label: "FRESH", className: "bg-primary text-primary-foreground" },
   at_risk: { label: "USE SOON", className: "bg-warning text-warning-foreground" },
   spoiled: { label: "SPOILED", className: "bg-destructive text-destructive-foreground" },
 };
-
+ 
 const formatRefreshTime = (date: Date | null) => {
   if (!date) return "Never";
   return date.toLocaleString(undefined, {
@@ -19,11 +19,13 @@ const formatRefreshTime = (date: Date | null) => {
     hour: "2-digit", minute: "2-digit", second: "2-digit",
   });
 };
-
+ 
 const Index = () => {
-  const { foodItems, latestReading, freshCount, atRiskCount, spoiledCount, loading, refreshing, lastRefreshed, secondsUntilRefresh, refetch } = useDashboardData();
+  const { foodItems, latestReading, inferenceByFoodItem, freshCount, atRiskCount, spoiledCount, loading, refreshing, lastRefreshed, refetch } = useDashboardData();
   const navigate = useNavigate();
-
+  const airQualityLevel = latestReading?.mq135_gas_level ?? latestReading?.gas_value;
+  const spoilageGasLevel = latestReading?.mq3_gas_level;
+ 
   if (loading) {
     return (
       <DashboardLayout>
@@ -31,7 +33,7 @@ const Index = () => {
       </DashboardLayout>
     );
   }
-
+ 
   return (
     <DashboardLayout>
       <div className="space-y-6 max-w-6xl">
@@ -50,17 +52,15 @@ const Index = () => {
               className="gap-2"
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-              {refreshing ? "Refreshing..." : `Refresh (${secondsUntilRefresh}s)`}
+              {refreshing ? "Updating Items..." : "Update Items"}
             </Button>
             <span className="text-xs text-muted-foreground">
               Last updated: {formatRefreshTime(lastRefreshed)}
             </span>
           </div>
-          <div className="sm:hidden text-xs text-muted-foreground">
-            Last updated: {formatRefreshTime(lastRefreshed)} · Next in {secondsUntilRefresh}s
-          </div>
+          <div className="sm:hidden text-xs text-muted-foreground">Last updated: {formatRefreshTime(lastRefreshed)}</div>
         </div>
-
+ 
         {/* Welcome banner */}
         <div className="rounded-xl bg-primary p-6 text-primary-foreground relative overflow-hidden">
           <div className="relative z-10">
@@ -73,7 +73,7 @@ const Index = () => {
             <Leaf className="h-24 w-24" />
           </div>
         </div>
-
+ 
         {/* Status cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card className="border-l-4 border-l-primary">
@@ -119,28 +119,33 @@ const Index = () => {
             </CardContent>
           </Card>
         </div>
-
+ 
         {/* Real-time sensor readings */}
         <Card>
           <CardContent className="p-6">
             <h3 className="text-lg font-bold text-foreground mb-4">Real-Time Information Collection</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="rounded-xl bg-accent p-5 text-center">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="rounded-xl bg-accent p-5 text-center h-full flex flex-col items-center justify-center">
                 <Droplets className="h-6 w-6 mx-auto mb-2 text-accent-foreground" />
                 <div className="text-sm font-medium text-accent-foreground">Humidity</div>
                 <div className="text-2xl font-bold text-foreground mt-1">{latestReading?.humidity ?? "--"}%</div>
               </div>
-              <div className="rounded-xl bg-warning/15 p-5 text-center">
+              <div className="rounded-xl bg-warning/15 p-5 text-center h-full flex flex-col items-center justify-center">
                 <Thermometer className="h-6 w-6 mx-auto mb-2 text-warning" />
                 <div className="text-sm font-medium text-warning">Temperature</div>
                 <div className="text-2xl font-bold text-foreground mt-1">{latestReading?.temperature ?? "--"} °C</div>
               </div>
-              <div className="rounded-xl bg-destructive/10 p-5 text-center">
-                <AlertCircle className="h-6 w-6 mx-auto mb-2 text-destructive" />
-                <div className="text-sm font-medium text-destructive">Gas Value</div>
-                <div className="text-2xl font-bold text-foreground mt-1">{latestReading?.gas_value ?? "--"}</div>
+              <div className="rounded-xl bg-sky-100 p-5 text-center dark:bg-sky-950/40 h-full flex flex-col items-center justify-center">
+                <Wind className="h-6 w-6 mx-auto mb-2 text-sky-600 dark:text-sky-400" />
+                <div className="text-sm font-medium text-sky-700 dark:text-sky-300">Air Quality (MQ135)</div>
+                <div className="text-2xl font-bold text-foreground mt-1">{airQualityLevel ?? "--"}</div>
               </div>
-              <div className="rounded-xl bg-accent p-5 text-center">
+              <div className="rounded-xl bg-orange-100 p-5 text-center dark:bg-orange-950/30 h-full flex flex-col items-center justify-center">
+                <AlertCircle className="h-6 w-6 mx-auto mb-2 text-orange-600 dark:text-orange-400" />
+                <div className="text-sm font-medium text-orange-700 dark:text-orange-300">Spoilage Gas (MQ3)</div>
+                <div className="text-2xl font-bold text-foreground mt-1">{spoilageGasLevel ?? "--"}</div>
+              </div>
+              <div className="rounded-xl bg-accent p-5 text-center h-full flex flex-col items-center justify-center">
                 <TrendingUp className="h-6 w-6 mx-auto mb-2 text-accent-foreground" />
                 <div className="text-sm font-medium text-accent-foreground">Fresh Items</div>
                 <div className="text-2xl font-bold text-foreground mt-1">{freshCount}</div>
@@ -148,7 +153,7 @@ const Index = () => {
             </div>
           </CardContent>
         </Card>
-
+ 
         {/* Detected items */}
         <Card>
           <CardContent className="p-6">
@@ -185,6 +190,11 @@ const Index = () => {
                         <div>
                           <div className="font-semibold text-foreground">{item.name}</div>
                           <div className="text-xs text-muted-foreground">Confidence: {item.confidence}%</div>
+                          {inferenceByFoodItem[item.id] && (
+                            <div className="text-[11px] text-muted-foreground mt-1">
+                              Final: {inferenceByFoodItem[item.id].final_status} | Vision: {inferenceByFoodItem[item.id].vision_status ?? "--"} | Sensor: {inferenceByFoodItem[item.id].sensor_status ?? "--"}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <Badge className={sc.className}>{sc.label}</Badge>
@@ -199,5 +209,5 @@ const Index = () => {
     </DashboardLayout>
   );
 };
-
+ 
 export default Index;
