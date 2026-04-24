@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, Clock, AlertCircle, Droplets, Thermometer, Wind, Leaf, RefreshCw } from "lucide-react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
  
 const statusConfig = {
@@ -25,6 +26,17 @@ const Index = () => {
   const navigate = useNavigate();
   const airQualityLevel = latestReading?.mq135_gas_level ?? latestReading?.gas_value;
   const spoilageGasLevel = latestReading?.mq3_gas_level;
+  const autoRefreshSeconds = Number(import.meta.env.VITE_DASHBOARD_AUTO_REFRESH_SECONDS ?? 30);
+
+  useEffect(() => {
+    if (!Number.isFinite(autoRefreshSeconds) || autoRefreshSeconds <= 0) return;
+
+    const intervalId = window.setInterval(() => {
+      void refetch();
+    }, autoRefreshSeconds * 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [autoRefreshSeconds, refetch]);
  
   if (loading) {
     return (
