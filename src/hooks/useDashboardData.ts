@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -20,9 +20,60 @@ interface SensorReading {
   humidity: number | null;
   temperature: number | null;
   gas_value: number | null;
+  mq135_gas_level?: number | null;
+  mq3_gas_level?: number | null;
   recorded_at: string;
   food_item_id: string | null;
 }
+
+type GenericRecord = Record<string, unknown>;
+
+const parseNumeric = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const pickNumeric = (source: GenericRecord, keys: string[]): number | null => {
+  for (const key of keys) {
+    const parsed = parseNumeric(source[key]);
+    if (parsed !== null) return parsed;
+  }
+  return null;
+};
+
+const normalizeSensorReading = (reading: unknown): SensorReading => {
+  const source = (reading ?? {}) as GenericRecord;
+
+  const mq135 = pickNumeric(source, [
+    "mq135_gas_level",
+    "mq135_gas_value",
+    "MQ135_gas_value",
+    "mq135",
+    "MQ135",
+  ]);
+  const mq3 = pickNumeric(source, [
+    "mq3_gas_level",
+    "mq3_gas_value",
+    "MQ3_gas_value",
+    "mq3",
+    "MQ3",
+  ]);
+
+  return {
+    id: String(source.id ?? ""),
+    humidity: parseNumeric(source.humidity),
+    temperature: parseNumeric(source.temperature),
+    gas_value: parseNumeric(source.gas_value) ?? mq135,
+    mq135_gas_level: mq135,
+    mq3_gas_level: mq3,
+    recorded_at: String(source.recorded_at ?? ""),
+    food_item_id: source.food_item_id === null || typeof source.food_item_id === "string" ? source.food_item_id : null,
+  };
+};
 
 interface Notification {
   id: string;
@@ -36,6 +87,7 @@ interface Notification {
 
 export const useDashboardData = () => {
   const { user } = useAuth();
+  const backendUrl = (import.meta.env.VITE_BACKEND_API_URL as string | undefined)?.replace(/\/+$/, "");
   const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
   const [latestReading, setLatestReading] = useState<SensorReading | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -43,7 +95,7 @@ export const useDashboardData = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!user) return;
     setRefreshing(true);
 
@@ -54,12 +106,12 @@ export const useDashboardData = () => {
     ]);
 
     if (itemsRes.data) setFoodItems(itemsRes.data as FoodItem[]);
-    if (readingRes.data && readingRes.data.length > 0) setLatestReading(readingRes.data[0] as SensorReading);
+    if (readingRes.data && readingRes.data.length > 0) setLatestReading(normalizeSensorReading(readingRes.data[0]));
     if (notifsRes.data) setNotifications(notifsRes.data as Notification[]);
     setLoading(false);
     setRefreshing(false);
     setLastRefreshed(new Date());
-  };
+  }, [user]);
 
   const REFRESH_INTERVAL = 30; // seconds
   const [secondsUntilRefresh, setSecondsUntilRefresh] = useState(REFRESH_INTERVAL);
@@ -95,13 +147,44 @@ export const useDashboardData = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => fetchData())
       .subscribe();
 
+    let eventSource: EventSource | null = null;
+    if (backendUrl && user?.id) {
+      fetch(`${backendUrl}/api/dashboard/${user.id}/latest`)
+        .then((res) => res.json())
+        .then((snapshot) => {
+          if (snapshot?.latest_reading) {
+            setLatestReading(normalizeSensorReading(snapshot.latest_reading));
+          }
+        })
+        .catch(() => {
+          // Keep UI resilient; Supabase polling/realtime still works.
+        });
+
+      eventSource = new EventSource(`${backendUrl}/api/stream/${user.id}`);
+      eventSource.onmessage = (event) => {
+        try {
+          const parsed = JSON.parse(event.data);
+          const payload = parsed?.payload;
+          if (payload?.latest_reading) {
+            setLatestReading(normalizeSensorReading(payload.latest_reading));
+          }
+          // Sync canonical entities from Supabase after live ingestion notice.
+          fetchData();
+          setSecondsUntilRefresh(REFRESH_INTERVAL);
+        } catch {
+          // Ignore malformed SSE events.
+        }
+      };
+    }
+
     return () => {
       clearInterval(countdown);
       supabase.removeChannel(foodChannel);
       supabase.removeChannel(sensorChannel);
       supabase.removeChannel(notifChannel);
+      if (eventSource) eventSource.close();
     };
-  }, [user]);
+  }, [user, backendUrl, fetchData]);
 
   const wrappedRefetch = async () => {
     setSecondsUntilRefresh(REFRESH_INTERVAL);

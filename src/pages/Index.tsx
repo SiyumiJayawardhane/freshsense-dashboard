@@ -23,6 +23,8 @@ const formatRefreshTime = (date: Date | null) => {
 const Index = () => {
   const { foodItems, latestReading, freshCount, atRiskCount, spoiledCount, loading, refreshing, lastRefreshed, secondsUntilRefresh, refetch } = useDashboardData();
   const navigate = useNavigate();
+  const airQualityLevel = latestReading?.mq135_gas_level ?? latestReading?.gas_value;
+  const spoilageGasLevel = latestReading?.mq3_gas_level;
 
   if (loading) {
     return (
@@ -124,23 +126,28 @@ const Index = () => {
         <Card>
           <CardContent className="p-6">
             <h3 className="text-lg font-bold text-foreground mb-4">Real-Time Information Collection</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="rounded-xl bg-accent p-5 text-center">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="rounded-xl bg-accent p-5 text-center h-full flex flex-col items-center justify-center">
                 <Droplets className="h-6 w-6 mx-auto mb-2 text-accent-foreground" />
                 <div className="text-sm font-medium text-accent-foreground">Humidity</div>
                 <div className="text-2xl font-bold text-foreground mt-1">{latestReading?.humidity ?? "--"}%</div>
               </div>
-              <div className="rounded-xl bg-warning/15 p-5 text-center">
+              <div className="rounded-xl bg-warning/15 p-5 text-center h-full flex flex-col items-center justify-center">
                 <Thermometer className="h-6 w-6 mx-auto mb-2 text-warning" />
                 <div className="text-sm font-medium text-warning">Temperature</div>
                 <div className="text-2xl font-bold text-foreground mt-1">{latestReading?.temperature ?? "--"} °C</div>
               </div>
-              <div className="rounded-xl bg-destructive/10 p-5 text-center">
-                <AlertCircle className="h-6 w-6 mx-auto mb-2 text-destructive" />
-                <div className="text-sm font-medium text-destructive">Gas Value</div>
-                <div className="text-2xl font-bold text-foreground mt-1">{latestReading?.gas_value ?? "--"}</div>
+              <div className="rounded-xl bg-sky-100 p-5 text-center dark:bg-sky-950/40 h-full flex flex-col items-center justify-center">
+                <Wind className="h-6 w-6 mx-auto mb-2 text-sky-600 dark:text-sky-400" />
+                <div className="text-sm font-medium text-sky-700 dark:text-sky-300">Air Quality (MQ135)</div>
+                <div className="text-2xl font-bold text-foreground mt-1">{airQualityLevel ?? "--"}</div>
               </div>
-              <div className="rounded-xl bg-accent p-5 text-center">
+              <div className="rounded-xl bg-orange-100 p-5 text-center dark:bg-orange-950/30 h-full flex flex-col items-center justify-center">
+                <AlertCircle className="h-6 w-6 mx-auto mb-2 text-orange-600 dark:text-orange-400" />
+                <div className="text-sm font-medium text-orange-700 dark:text-orange-300">Spoilage Gas (MQ3)</div>
+                <div className="text-2xl font-bold text-foreground mt-1">{spoilageGasLevel ?? "--"}</div>
+              </div>
+              <div className="rounded-xl bg-accent p-5 text-center h-full flex flex-col items-center justify-center">
                 <TrendingUp className="h-6 w-6 mx-auto mb-2 text-accent-foreground" />
                 <div className="text-sm font-medium text-accent-foreground">Fresh Items</div>
                 <div className="text-2xl font-bold text-foreground mt-1">{freshCount}</div>
